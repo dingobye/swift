@@ -979,6 +979,26 @@ dwTests.test("isMultiple") {
   isMultipleTest(type: UInt128.self)
 }
 
+dwTests.test("isPower") {
+  func isPowerTest<T: FixedWidthInteger>(type: T.Type) {
+    expectTrue((0 as T).isPower(of: 0))
+    expectTrue((1 as T).isPower(of: 0))
+    expectTrue((100 as T).isPower(of: 10))
+    expectFalse(T.max.isPower(of: 2))
+    if T.isSigned {
+      expectTrue((1 as T).isPower(of: -1))
+      expectTrue((-1 as T).isPower(of: -1))
+      expectFalse((-1 as T).isPower(of: 1))
+      expectTrue(T.min.isPower(of: -2))
+    } else {
+      expectFalse((T.min).isPower(of: 2))
+      expectTrue(((1 as T) << (T.bitWidth - 1)).isPower(of: 2))
+    }
+  }
+  isPowerTest(type: Int128.self)
+  isPowerTest(type: UInt128.self)
+}
+
 dwTests.test("MultiplyMinByMinusOne") {
   func f(_ x: Int1024) -> Int1024 {
     return x * -1

@@ -825,6 +825,34 @@ tests.test("isMultiple") {
   isMultipleTest(type: UInt64.self)
 }
 
+tests.test("isPower") {
+  func isPowerTest<T: FixedWidthInteger>(type: T.Type) {
+    expectTrue((0 as T).isPower(of: 0))
+    expectTrue((1 as T).isPower(of: 0))
+    expectTrue((100 as T).isPower(of: 10))
+    expectFalse(T.max.isPower(of: 2))
+    if T.isSigned {
+      expectTrue((1 as T).isPower(of: -1))
+      expectTrue((-1 as T).isPower(of: -1))
+      expectFalse((-1 as T).isPower(of: 1))
+      expectTrue(T.min.isPower(of: -2))
+    } else {
+      expectFalse(T.min.isPower(of: 2))
+      expectTrue(((1 as T) << (T.bitWidth - 1)).isPower(of: 2))
+    }
+  }
+  isPowerTest(type: Int.self)
+  isPowerTest(type: Int8.self)
+  isPowerTest(type: Int16.self)
+  isPowerTest(type: Int32.self)
+  isPowerTest(type: Int64.self)
+  isPowerTest(type: UInt.self)
+  isPowerTest(type: UInt8.self)
+  isPowerTest(type: UInt16.self)
+  isPowerTest(type: UInt32.self)
+  isPowerTest(type: UInt64.self)
+}
+
 tests.test("MultiplyMinByMinusOne") {
   func f(_ x: Int) -> Int {
     return x * -1

@@ -1868,10 +1868,24 @@ BigIntBitTests.test("words") {
   expectEqualSequence([UInt.max], (-1 as BigIntBit).words)
 }
 
-runAllTests()
-
 BigIntTests.test("isMultiple") {
   // Test that these do not crash.
   expectTrue((0 as _BigInt<UInt>).isMultiple(of: 0))
   expectFalse((1 as _BigInt<UInt>).isMultiple(of: 0))
 }
+
+BigIntTests.test("isPower") {
+  expectTrue((0 as _BigInt<UInt>).isPower(of: 0))
+  expectTrue((1 as _BigInt<UInt>).isPower(of: 0))
+  expectTrue((1 as _BigInt<UInt>).isPower(of: 1))
+  expectTrue((1 as _BigInt<UInt>).isPower(of: -1))
+  expectTrue((-1 as _BigInt<UInt>).isPower(of: -1))
+  expectFalse((-1 as _BigInt<UInt>).isPower(of: 1))
+  expectTrue((4 as _BigInt<UInt>).isPower(of: 2))
+  expectTrue((-8 as _BigInt<UInt>).isPower(of: -2))
+  expectTrue((16 as _BigInt<UInt>).isPower(of: -2))
+  expectFalse((32 as _BigInt<UInt>).isPower(of: -2))
+  expectTrue((100 as _BigInt<UInt>).isPower(of: 10))
+}
+
+runAllTests()
