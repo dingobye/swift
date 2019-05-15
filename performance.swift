@@ -10,16 +10,26 @@ typealias BigInt = _BigInt<UInt>
 extension BinaryInteger {
   @inlinable
   public func isPower(of base: Self) -> Bool {
-    // Fast path when base is 2 or 10.
+    // Fast path when base is one of the common cases.
     if base == 2 { return self._isPowerOfTwo }
     if base == 10 { return self._isPowerOfTen }
+    if base._isPowerOfTwo { return self._isPowerOf(powerOfTwo: base) }
     // Slow path for other bases.
-    return self._isPower(of: base)
+    return self._slowIsPower(of: base)
   }
   
-  @usableFromInline @_transparent
+  @inlinable @inline(__always)
   internal var _isPowerOfTwo: Bool {
     return self > 0 && self & (self - 1) == 0
+  }
+
+  // The algorithm below is taken from Nevin's comments.
+  // https://forums.swift.org/t/adding-ispowerof2-to-binaryinteger/24087/31
+  @inlinable
+  internal func _isPowerOf(powerOfTwo base: Self) -> Bool {
+    precondition(base._isPowerOfTwo)
+    guard self._isPowerOfTwo else { return false }
+    return trailingZeroBitCount.isMultiple(of: base.trailingZeroBitCount)
   }
 
   // The algorithm below is taken from Michel Fortin's comments.
@@ -77,12 +87,12 @@ extension BinaryInteger {
         ((exponent << 2) | 0b01) & 0b1111 else { return false }
 
       // Now time for the slow path.
-      return self._isPower(of: 10)
+      return self._slowIsPower(of: 10)
     }
   }
 
   @usableFromInline
-  internal func _isPower(of base: Self) -> Bool {
+  internal func _slowIsPower(of base: Self) -> Bool {
     // If self is 1, return true.
     if self == 1 { return true }
 
@@ -135,15 +145,16 @@ private func tasks<T: BinaryInteger>(_ :T.Type) {
 
   task("\(T.self).isPower(of: 2)     ", n, { (x:T)->Bool in x.isPower(of: 2) }, repeating)
   task("\(T.self)._isPowerOfTwo      ", n, { (x:T)->Bool in x._isPowerOfTwo }, repeating)
-  task("\(T.self)._isPower(of: 2)    ", n, { (x:T)->Bool in x._isPower(of: 2) }, repeating)
-  task("\(T.self)._isPower(of: 4)    ", n, { (x:T)->Bool in x.isPower(of: 4) }, repeating)
+  task("\(T.self)._slowIsPower(of: 2)", n, { (x:T)->Bool in x._slowIsPower(of: 2) }, repeating)
+  task("\(T.self).isPower(of: 4)     ", n, { (x:T)->Bool in x.isPower(of: 4) }, repeating)
+  task("\(T.self)._slowIsPower(of: 4)", n, { (x:T)->Bool in x._slowIsPower(of: 4) }, repeating)
 
   // Set n as the greatest power of 10 representable
   let bound = n / 10
   n = 100 as T
   while n <= bound { n *= 10 }
   task("\(T.self)._isPowerOfTen      ", n, { (x:T)->Bool in x._isPowerOfTen }, repeating)
-  task("\(T.self)._isPower(of: 10)   ", n, { (x:T)->Bool in x._isPower(of: 10) }, repeating)
+  task("\(T.self)._slowIsPower(of:10)", n, { (x:T)->Bool in x._slowIsPower(of: 10) }, repeating)
 }
 
 private func measure<T: FixedWidthInteger>(_ t:T.Type) {
