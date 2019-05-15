@@ -1225,7 +1225,7 @@ public protocol BinaryInteger :
   /// _-27 = -3 * -3 * -3_. *1* is a power of everything because any number to
   /// the zero power is one.
   ///
-  /// For the coner case where base is zero, `x.isPower(of: 0)` is `true` if
+  /// For the corner case where base is zero, `x.isPower(of: 0)` is `true` if
   /// `x` is either zero or one, and `false` otherwise.
   ///
   /// - Parameter base: The base value to test.
