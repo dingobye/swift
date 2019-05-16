@@ -17,10 +17,15 @@ extension BinaryInteger {
     // Slow path for other bases.
     return self._slowIsPower(of: base)
   }
-  
+
   @inlinable @inline(__always)
   internal var _isPowerOfTwo: Bool {
     return self > 0 && self & (self - 1) == 0
+  }
+
+  @inlinable @inline(__always)
+  internal var _isPowerOfTwo_cttz: Bool {
+    return (self > 0) && (self == (1 as Self) << self.trailingZeroBitCount)
   }
 
   // The algorithm below is taken from Nevin's comments.
@@ -112,8 +117,23 @@ extension BinaryInteger {
 
 extension FixedWidthInteger {
   // Alternative solution to _isPowerOfTwo
-  @inlinable public var _isPowerOfTwo_ctpop: Bool {
+  @inlinable @inline(__always)
+  public var _isPowerOfTwo_ctpop: Bool {
       return self > 0 && self.nonzeroBitCount == 1
+  }
+}
+
+
+extension _BigInt {
+  internal var _isPowerOfTwo_BigInt : Bool {
+    guard !self.isZero && !self.isNegative else { return false }
+    for i in 0..<(_data.count - 1) {
+      if _data[i] != 0 { return false }
+    }
+    precondition(!_data.isEmpty, "A nonzero BigInt must have any element in _data.")
+    let w = _data.last!
+    precondition(w != 0, "_data has no trailing zero elements")
+    return w & (w - 1) == 0
   }
 }
 
@@ -122,11 +142,11 @@ private func timing(title: String, op: ()->()) {
   let t1 = CFAbsoluteTimeGetCurrent() // <------ Start timing
   op()
   let t2 = CFAbsoluteTimeGetCurrent() // <------ End timing
-  let d = String(format: "%.3f", t2 - t1)
+  let d = String(format: "%.6f", t2 - t1)
   print("\(title):  execution time is \(d) s.")
 }
 
-
+@inline(never)
 private func task<T: BinaryInteger>(_ title: String, _ n: T, _ isPowerOp: (T)->Bool, _ repeating: Int) {
   timing(title: title, op: {
       var n: T = n
@@ -137,14 +157,17 @@ private func task<T: BinaryInteger>(_ title: String, _ n: T, _ isPowerOp: (T)->B
   })
 }
 
-private func tasks<T: BinaryInteger>(_ :T.Type) {
+private var bitWidthForTestBigInt = 1024
+
+private func commonTasks<T: BinaryInteger>(_ :T.Type) {
   let isBigInt = T.self == BigInt.self
   let repeating = isBigInt ? 1000 : 100_000_000
   var n: T = 1 as T
-  n = n << (isBigInt ? 1023 : (n.bitWidth - 2))
+  n = n << (isBigInt ? (bitWidthForTestBigInt - 1) : (n.bitWidth - 2))
 
   task("\(T.self).isPower(of: 2)     ", n, { (x:T)->Bool in x.isPower(of: 2) }, repeating)
   task("\(T.self)._isPowerOfTwo      ", n, { (x:T)->Bool in x._isPowerOfTwo }, repeating)
+  task("\(T.self)._isPowerOfTwo_cttz ", n, { (x:T)->Bool in x._isPowerOfTwo_cttz }, repeating)
   task("\(T.self)._slowIsPower(of: 2)", n, { (x:T)->Bool in x._slowIsPower(of: 2) }, repeating)
   task("\(T.self).isPower(of: 4)     ", n, { (x:T)->Bool in x.isPower(of: 4) }, repeating)
   task("\(T.self)._slowIsPower(of: 4)", n, { (x:T)->Bool in x._slowIsPower(of: 4) }, repeating)
@@ -161,14 +184,22 @@ private func measure<T: FixedWidthInteger>(_ t:T.Type) {
   let repeating = 100_000_000
   let n: T = (1 as T) << (T.bitWidth - 2)
   task("\(T.self)._isPowerOfTwo_ctpop", n, { (x:T)->Bool in x._isPowerOfTwo_ctpop }, repeating)
-  tasks(t)
+
+  commonTasks(t)
   print("")
 }
-private func measure<T: BinaryInteger>(_ t:T.Type) {
-  print("\(T.self)._isPowerOfTwo_ctpop:  N/A")
-  tasks(t)
+
+private func measureBigInt(bits: Int) {
+  bitWidthForTestBigInt = bits
+  typealias T = BigInt
+  let repeating = 1000
+  let n: T = (1 as T) << (bitWidthForTestBigInt - 1)
+  task("\(T.self)._isPowerOfTwo_BigInt", n, { (x:T)->Bool in x._isPowerOfTwo_BigInt }, repeating)
+
+  commonTasks(BigInt.self)
   print("")
 }
+
 
 //===-------------------------------------------------------===//
 //===--------  Built-in integers
@@ -184,5 +215,6 @@ measure(Int64.self)
 
 //===---------------------------------------------------------===//
 //===--------  _BigInt<> from swift/test/Prototypes/BigInt.swift
-measure(BigInt.self)
+measureBigInt(bits: 1024)
+measureBigInt(bits: 32768)
 
