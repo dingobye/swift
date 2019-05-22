@@ -38,8 +38,9 @@ extension BinaryInteger {
   @inlinable
   internal var _isPowerOfTwo_words: Bool {
     let words = self.words
-    precondition(words.isEmpty == false)
-    // If the type is represented in a single word, perform the classic check.
+    guard !words.isEmpty else { return false }
+
+    // If the value is represented in a single word, perform the classic check.
     if words.count == 1 {
       let word = words[words.startIndex]
       return word > 0 && word & (word - 1) == 0
@@ -51,8 +52,7 @@ extension BinaryInteger {
     }
     // Check if there is exactly one non-zero word and it is a power of two.
     var foundPowerOfTwoWord = false
-    for i in words.startIndex..<words.endIndex {
-      let word: UInt = words[i]
+    for word in words {
       if word == 0 { continue }
       if foundPowerOfTwoWord { return false }
       if word & (word - 1) != 0 { return false }
