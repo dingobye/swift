@@ -4,23 +4,61 @@
 
 import Foundation
 
+
+// DoubleWidth<> is defined in swift/test/Prototypes/DoubleWidth.swift.gyb
+typealias UInt128 = DoubleWidth<UInt64>
+typealias UInt256 = DoubleWidth<UInt128>
+typealias UInt512 = DoubleWidth<UInt256>
+typealias UInt1024 = DoubleWidth<UInt512>
+typealias Int128 = DoubleWidth<Int64>
+typealias Int256 = DoubleWidth<Int128>
+typealias Int512 = DoubleWidth<Int256>
+typealias Int1024 = DoubleWidth<Int512>
+
 // _BigInt<> is defined in swift/test/Prototypes/BigInt.swift
 typealias BigInt = _BigInt<UInt>
+
 
 extension BinaryInteger {
   @inlinable
   public func isPower(of base: Self) -> Bool {
     // Fast path when base is one of the common cases.
-    if base == 2 { return self._isPowerOfTwo }
+    if base == 2 { return self._isPowerOfTwo_words }
     if base == 10 { return self._isPowerOfTen }
-    if base._isPowerOfTwo { return self._isPowerOf(powerOfTwo: base) }
+    if base._isPowerOfTwo_words { return self._isPowerOf(powerOfTwo: base) }
     // Slow path for other bases.
     return self._slowIsPower(of: base)
   }
 
   @inlinable @inline(__always)
-  internal var _isPowerOfTwo: Bool {
+  internal var _isPowerOfTwo_classic: Bool {
     return self > 0 && self & (self - 1) == 0
+  }
+
+  @inlinable
+  internal var _isPowerOfTwo_words: Bool {
+    let words = self.words
+    precondition(words.isEmpty == false)
+    // If the type is represented in a single word, perform the classic check.
+    if words.count == 1 {
+      let word = words[words.startIndex]
+      return word > 0 && word & (word - 1) == 0
+    }
+
+    // Return false if it is negative by checking the most significant word.
+    if Self.isSigned && Int(bitPattern: words[words.endIndex - 1]) < 0 {
+      return false
+    }
+    // Check if there is exactly one non-zero word and it is a power of two.
+    var foundPowerOfTwoWord = false
+    for i in words.startIndex..<words.endIndex {
+      let word: UInt = words[i]
+      if word == 0 { continue }
+      if foundPowerOfTwoWord { return false }
+      if word & (word - 1) != 0 { return false }
+      foundPowerOfTwoWord = true
+    }
+    return foundPowerOfTwoWord
   }
 
   @inlinable @inline(__always)
@@ -32,8 +70,8 @@ extension BinaryInteger {
   // https://forums.swift.org/t/adding-ispowerof2-to-binaryinteger/24087/31
   @inlinable
   internal func _isPowerOf(powerOfTwo base: Self) -> Bool {
-    precondition(base._isPowerOfTwo)
-    guard self._isPowerOfTwo else { return false }
+    precondition(base._isPowerOfTwo_words)
+    guard self._isPowerOfTwo_words else { return false }
     return trailingZeroBitCount.isMultiple(of: base.trailingZeroBitCount)
   }
 
@@ -138,6 +176,7 @@ extension _BigInt {
 }
 
 
+@inline(never)
 private func timing(title: String, op: ()->()) {
   let t1 = CFAbsoluteTimeGetCurrent() // <------ Start timing
   op()
@@ -159,36 +198,40 @@ private func task<T: BinaryInteger>(_ title: String, _ n: T, _ isPowerOp: (T)->B
 
 private var bitWidthForTestBigInt = 1024
 
+@inline(never)
 private func commonTasks<T: BinaryInteger>(_ :T.Type) {
   let isBigInt = T.self == BigInt.self
-  let repeating = isBigInt ? 1000 : 100_000_000
   var n: T = 1 as T
   n = n << (isBigInt ? (bitWidthForTestBigInt - 1) : (n.bitWidth - 2))
+  let repeating = isBigInt ? 1000 : (n.bitWidth < 128 ? 100_000_000 : 100_000)
 
-  task("\(T.self).isPower(of: 2)     ", n, { (x:T)->Bool in x.isPower(of: 2) }, repeating)
-  task("\(T.self)._isPowerOfTwo      ", n, { (x:T)->Bool in x._isPowerOfTwo }, repeating)
-  task("\(T.self)._isPowerOfTwo_cttz ", n, { (x:T)->Bool in x._isPowerOfTwo_cttz }, repeating)
-  task("\(T.self)._slowIsPower(of: 2)", n, { (x:T)->Bool in x._slowIsPower(of: 2) }, repeating)
-  task("\(T.self).isPower(of: 4)     ", n, { (x:T)->Bool in x.isPower(of: 4) }, repeating)
-  task("\(T.self)._slowIsPower(of: 4)", n, { (x:T)->Bool in x._slowIsPower(of: 4) }, repeating)
+  task("\(T.self).isPower(of: 2)       ", n, { (x:T)->Bool in x.isPower(of: 2) }, repeating)
+  task("\(T.self)._isPowerOfTwo_classic", n, { (x:T)->Bool in x._isPowerOfTwo_classic }, repeating)
+  task("\(T.self)._isPowerOfTwo_cttz   ", n, { (x:T)->Bool in x._isPowerOfTwo_cttz }, repeating)
+  task("\(T.self)._isPowerOfTwo_words  ", n, { (x:T)->Bool in x._isPowerOfTwo_words }, repeating)
+  task("\(T.self)._slowIsPower(of: 2)  ", n, { (x:T)->Bool in x._slowIsPower(of: 2) }, repeating)
+  task("\(T.self).isPower(of: 4)       ", n, { (x:T)->Bool in x.isPower(of: 4) }, repeating)
+  task("\(T.self)._slowIsPower(of: 4)  ", n, { (x:T)->Bool in x._slowIsPower(of: 4) }, repeating)
 
   // Set n as the greatest power of 10 representable
   let bound = n / 10
   n = 100 as T
   while n <= bound { n *= 10 }
-  task("\(T.self)._isPowerOfTen      ", n, { (x:T)->Bool in x._isPowerOfTen }, repeating)
-  task("\(T.self)._slowIsPower(of:10)", n, { (x:T)->Bool in x._slowIsPower(of: 10) }, repeating)
+  task("\(T.self)._isPowerOfTen        ", n, { (x:T)->Bool in x._isPowerOfTen }, repeating)
+  task("\(T.self)._slowIsPower(of: 10) ", n, { (x:T)->Bool in x._slowIsPower(of: 10) }, repeating)
 }
 
+@inline(never)
 private func measure<T: FixedWidthInteger>(_ t:T.Type) {
-  let repeating = 100_000_000
   let n: T = (1 as T) << (T.bitWidth - 2)
-  task("\(T.self)._isPowerOfTwo_ctpop", n, { (x:T)->Bool in x._isPowerOfTwo_ctpop }, repeating)
+  let repeating = n.bitWidth < 128 ? 100_000_000 : 100_000
+  task("\(T.self)._isPowerOfTwo_ctpop  ", n, { (x:T)->Bool in x._isPowerOfTwo_ctpop }, repeating)
 
   commonTasks(t)
   print("")
 }
 
+@inline(never)
 private func measureBigInt(bits: Int) {
   bitWidthForTestBigInt = bits
   typealias T = BigInt
@@ -211,6 +254,18 @@ measure(Int8.self)
 measure(Int16.self)
 measure(Int32.self)
 measure(Int64.self)
+
+
+//===---------------------------------------------------------===//
+//===--------  DoubleWidth<> from swift/test/Prototypes/DoubleWidth.swift.gyb
+measure(UInt128.self)
+measure(UInt256.self)
+measure(UInt512.self)
+measure(UInt1024.self)
+measure(Int128.self)
+measure(Int256.self)
+measure(Int512.self)
+measure(Int1024.self)
 
 
 //===---------------------------------------------------------===//
