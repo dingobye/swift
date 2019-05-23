@@ -35,6 +35,8 @@ extension BinaryInteger {
     return self > 0 && self & (self - 1) == 0
   }
 
+  // This fast path implementation is suggested by Steve Canon.
+  // https://forums.swift.org/t/adding-ispowerof2-to-binaryinteger/24087/60
   @inlinable
   internal var _isPowerOfTwo_words: Bool {
     let words = self.words
@@ -42,23 +44,24 @@ extension BinaryInteger {
 
     // If the value is represented in a single word, perform the classic check.
     if words.count == 1 {
-      let word = words[words.startIndex]
-      return word > 0 && word & (word - 1) == 0
+      return self > 0 && self & (self - 1) == 0
     }
 
-    // Return false if it is negative by checking the most significant word.
-    if Self.isSigned && Int(bitPattern: words[words.endIndex - 1]) < 0 {
+    // Return false if it is negative.  Here we only need to check the most
+    // significant word (i.e. the last element of `words`).
+    if Self.isSigned && Int(bitPattern: words.last!) < 0 {
       return false
     }
+
     // Check if there is exactly one non-zero word and it is a power of two.
-    var foundPowerOfTwoWord = false
+    var found = false
     for word in words {
-      if word == 0 { continue }
-      if foundPowerOfTwoWord { return false }
-      if word & (word - 1) != 0 { return false }
-      foundPowerOfTwoWord = true
+      if word != 0 {
+        if found || word & (word - 1) != 0 { return false }
+        found = true
+      }
     }
-    return foundPowerOfTwoWord
+    return found
   }
 
   @inlinable @inline(__always)
