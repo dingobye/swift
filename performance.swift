@@ -1,5 +1,5 @@
-// This file presents the code to measure the performance of 
-// isPower(of:) implementation. The relevant pitch thread is 
+// This file presents the code to measure the performance of
+// isPower(of:) implementation. The relevant pitch thread is
 // https://forums.swift.org/t/adding-ispowerof2-to-binaryinteger/24087
 
 import Foundation
@@ -64,6 +64,7 @@ extension BinaryInteger {
     return found
   }
 
+  // Alternative fast path for input base 2.
   @inlinable @inline(__always)
   internal var _isPowerOfTwo_cttz: Bool {
     return (self > 0) && (self == (1 as Self) << self.trailingZeroBitCount)
@@ -75,7 +76,7 @@ extension BinaryInteger {
   internal func _isPowerOf(powerOfTwo base: Self) -> Bool {
     precondition(base._isPowerOfTwo_words)
     guard self._isPowerOfTwo_words else { return false }
-    return trailingZeroBitCount.isMultiple(of: base.trailingZeroBitCount)
+    return self.trailingZeroBitCount.isMultiple(of: base.trailingZeroBitCount)
   }
 
   // The algorithm below is taken from Michel Fortin's comments.
@@ -144,11 +145,12 @@ extension BinaryInteger {
 
     // Here if base is 0, 1 or -1, return true iff self equals base.
     if base.magnitude <= 1 { return self == base }
-    
+
     // At this point, we have base.magnitude >= 2. Repeatedly perform
     // multiplication by a factor of base, and check if it can equal self.
-    guard self.isMultiple(of: base) else { return false }
-    let bound = self / base
+    let (bound, remainder) = self.quotientAndRemainder(dividingBy: base)
+    guard remainder == 0 else { return false }
+
     var x: Self = 1
     while x.magnitude < bound.magnitude { x *= base }
     return x == bound
@@ -157,15 +159,16 @@ extension BinaryInteger {
 
 
 extension FixedWidthInteger {
-  // Alternative solution to _isPowerOfTwo
+  // Alternative fast path for input base 2.
   @inlinable @inline(__always)
-  public var _isPowerOfTwo_ctpop: Bool {
-      return self > 0 && self.nonzeroBitCount == 1
+  internal var _isPowerOfTwo_ctpop: Bool {
+    return self > 0 && self.nonzeroBitCount == 1
   }
 }
 
 
 extension _BigInt {
+  // Fast path for input base 2, which is specifically optimized for BigInt.
   internal var _isPowerOfTwo_BigInt : Bool {
     guard !self.isZero && !self.isNegative else { return false }
     for i in 0..<(_data.count - 1) {
@@ -246,7 +249,6 @@ private func measureBigInt(bits: Int) {
   print("")
 }
 
-
 //===-------------------------------------------------------===//
 //===--------  Built-in integers
 measure(UInt8.self)
@@ -257,7 +259,6 @@ measure(Int8.self)
 measure(Int16.self)
 measure(Int32.self)
 measure(Int64.self)
-
 
 //===---------------------------------------------------------===//
 //===--------  DoubleWidth<> from swift/test/Prototypes/DoubleWidth.swift.gyb
@@ -275,4 +276,3 @@ measure(Int1024.self)
 //===--------  _BigInt<> from swift/test/Prototypes/BigInt.swift
 measureBigInt(bits: 1024)
 measureBigInt(bits: 32768)
-
